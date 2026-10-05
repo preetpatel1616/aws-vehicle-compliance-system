@@ -14,10 +14,14 @@ export async function POST(request: Request) {
       );
     }
 
+    // Internal calls go through the auth middleware too, so pass the caller's token on.
+    const authorization = request.headers.get("Authorization") ?? "";
+
     //1.Image upload
     const uploadResponse = await fetch(`${process.env.BASE_URL}/api/images`, {
       method: "POST",
       body: formData,
+      headers: { Authorization: authorization },
     });
 
     //Validate the response
@@ -40,7 +44,7 @@ export async function POST(request: Request) {
     const ocrResponse = await fetch(`${process.env.BASE_URL}/api/ocr`, {
       method: "POST",
       body: JSON.stringify({ fileKey, state }),
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", Authorization: authorization },
     });
 
     if (!ocrResponse.ok) {
@@ -61,15 +65,14 @@ export async function POST(request: Request) {
         { status: 404, headers: { "Content-Type": "application/json" } }
       );
     }
-    console.log("before");
     // Step 3: Call the Compliance GET API
     const complianceResponse = await fetch(
       `${process.env.BASE_URL}/api/compliances?licensePlate=${licensePlate}`,
       {
         method: "GET",
+        headers: { Authorization: authorization },
       }
     );
-    console.log("after")
 
     if (!complianceResponse.ok) {
       const errorData = await complianceResponse.json();
