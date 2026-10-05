@@ -1,113 +1,60 @@
-# 🚗 Vehicle Compliance System
+# Vehicle Compliance System
 
-A cloud-native platform that automates vehicle compliance checks by extracting license plate data from uploaded vehicle images using OCR and checking them against a compliance database. The system sends automated email notifications based on the results.
+Upload a photo of a vehicle, and the system reads its licence plate, looks the vehicle up in a compliance database (insurance and registration), and emails the owner the result.
 
----
+## How it works
 
-## 🔧 Tech Stack
+1. **Upload**: the image is stored in AWS S3 (`/api/images`).
+2. **Read the plate**: AWS Rekognition detects text in the image (`/api/ocr`). Rekognition returns every piece of text it sees, so a filter (`src/app/api/ocr/config.ts`) drops noise words and keeps only strings that match plate formats.
+3. **Check compliance**: the plate is looked up in PostgreSQL through Prisma (vehicle, owner, insurance and registration status) (`/api/compliance-check`).
+4. **Notify**: the owner gets an email with the result, sent over SMTP with Nodemailer (`src/app/utils/email.ts`).
 
-- **Frontend & Backend**: Next.js (with API routes)
-- **Cloud Services (AWS)**:
-  - AWS Rekognition – for OCR
-  - AWS Lambda – for batch processing
-  - AWS SES – for email notifications
-  - AWS RDS (PostgreSQL) – for storing vehicle compliance data
-  - AWS S3 – for image storage
-  - AWS Elastic Beanstalk – for deployment
-- **Security & Deployment**:
-  - JWT – for token-based authentication
-  - Docker – containerization
-  - GitHub Actions – CI/CD
+## Stack
 
----
+- Next.js 15 (App Router API routes), TypeScript
+- PostgreSQL with Prisma (schema and migrations in `prisma/`)
+- AWS S3 (image storage) and AWS Rekognition (text detection)
+- Nodemailer over SMTP (email)
+- JWT auth: `/api/login` issues a token; `src/middleware.ts` rejects any other API call without a valid one
+- Docker; GitHub Actions pipeline that builds the image, pushes it to Amazon ECR and deploys to AWS Elastic Beanstalk
 
-## 🎯 Features
-
-| Feature | Status | Description |
-|--------|--------|-------------|
-| Vehicle image upload | ✅ | Allows image submission via form |
-| OCR using Rekognition | ✅ | Extracts license plate from images |
-| Regex-based filtering | ✅ | Isolates valid plate numbers |
-| PostgreSQL compliance check | ✅ | Verifies plate data in DB |
-| SES email notifications | ✅ | Sends compliance result to user |
-| JWT-based Auth | ✅ | Secures sensitive endpoints |
-| Dockerized deployment | ✅ | For consistent cloud deployment |
-| CI/CD (GitHub Actions) | ✅ | Tests and deploys to AWS |
-| Lambda-based batch OCR | ⚙️ | Script present for processing |
-| Multi-region readiness | 📝 | Deployment design prepared |
-| Object detection OCR | 📝 | Future enhancement planned |
-
----
-
-## 📂 Folder Overview
+## Run locally
 
 ```bash
-.
-├── pages/api/                 # Next.js backend API routes
-├── lib/aws/rekognition.ts     # AWS Rekognition OCR logic
-├── lib/aws/ses.ts             # AWS SES logic
-├── docker/                    # Dockerfiles and deployment shell scripts
-├── prisma/                    # DB models and PostgreSQL schema
-└── .ebextensions/             # Elastic Beanstalk configuration
+cp .env.example .env   # fill in DATABASE_URL, AWS, SMTP and JWT values
+npm install
+npx prisma migrate deploy && npm run seed
+npm run dev            # http://localhost:3000
 ```
 
----
-
-## 🔍 OCR Accuracy Challenge
-
-- **Issue**: AWS Rekognition detected irrelevant text from images.
-- **Fix**: Developed custom regex-based filtering pipeline.
-- **Improvement**: OCR accuracy rose from ~15% to ~50%.
-
----
-
-## 📩 Email Notifications
-
-Automated email is sent to users after compliance verification using **AWS SES**.
-
----
-
-## 🛡️ Security
-
-- JWT-based auth implemented for protected routes.
-- Tokens generated post-login.
-- Credentials and tokens stored in `.env` file (not committed).
-
----
-
-## 🧪 Future Improvements
-
-- Integrate object detection before OCR for better accuracy.
-- Train region-specific models for localized results.
-
----
-
-## 📸 Preview
-
-_Example flow from image upload to notification:_
-
-> *(Add screenshots or GIFs here if available in the repo)*
-
----
-
-## 🚀 Deployment
+Or with Docker:
 
 ```bash
-# Local build and run
 docker build -t vehicle-compliance .
-docker run -p 3000:3000 vehicle-compliance
-
-# CI/CD handled via GitHub Actions to Elastic Beanstalk
+docker run -p 3000:3000 --env-file .env vehicle-compliance
 ```
 
----
+## Project structure
 
-## 🙋‍♂️ Author
+```
+src/app/api/
+  images/            upload to S3
+  ocr/               Rekognition text detection + plate filter
+  compliance-check/  look up plate, email the result
+  compliances/       read and update compliance records
+  vehicles/          vehicle records
+  login/             issue JWT
+src/app/utils/       auth (JWT) and email helpers
+prisma/              schema, migrations, seed data
+.github/workflows/   build, push to ECR, deploy to Elastic Beanstalk
+```
 
-Built by [Preet Patel](https://github.com/preetpatel1616)
+## Limitations
 
----
+- Plate reading depends on a hand-written filter, so accuracy drops on plate formats it does not know.
+- No automated tests yet; the pipeline builds and deploys only.
 
-## 📄 License
+## Next steps
 
-MIT
+- Detect the plate region before reading text, to cut noise.
+- Add tests for the plate filter and the compliance check.
